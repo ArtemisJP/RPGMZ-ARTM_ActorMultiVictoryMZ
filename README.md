@@ -7,5 +7,5 @@
   - 1モーションのスプライト行数を拡張可能<BR>
   - Battle Core VisuStella MZ の競合対策<BR>
   
-MV版で勝利モーション設定を行う場合は、
-フトコロ様作のプラグイン [SVキャラのモーションを拡張するプラグイン](https://github.com/futokoro/RPGMaker/blob/master/FTKR_ExSvMotion.ja.md) をご活用下さい。
+▼下記のMV版プラグインを参考にさせて頂きました。<BR>
+フトコロ様作 [SVキャラのモーションを拡張するプラグイン](https://github.com/futokoro/RPGMaker/blob/master/FTKR_ExSvMotion.ja.md) 
