@@ -8,6 +8,7 @@
 // 1.0.0 初版
 // 1.1.0 戦闘不能アクターも勝利モーションになる不具合を修正
 //       大規模なリファクタリングを実施
+// 1.1.1 勝利モーション開始直後の周期遅延を修正
 // =================================================================
 /*:ja
  * @target MZ
@@ -39,6 +40,9 @@
  * ～使用例2～
  * ・勝利2回のあとにグループ設定1を繰り返す場合
  *   <AMV_MTYPE:victory,2,group1,0>
+ *
+ * 【補足事項】
+ *   既存のモーション名については同梱の「Help_Motions.PNG」をご参照下さい。
  *
  * ■オプション
  * ・オプション1は以下の記述方式です。
@@ -149,8 +153,16 @@
         return Sprite_Actor.MOTIONS[getMotion(actor)];
     }
 
-    function getMotionLC(actor) {
+    function getMotionLMC(actor) {
         return actor._motionCInfoAMV[actor._motionCIndexAMV];
+    }
+
+    function getCountLM(actor) {
+        return actor._loopCountAMV;
+    }
+
+    function getCountLMC(actor) {
+        return actor._loopCCountAMV;
     }
 
     function checkMSW(actor, state, sign) {
@@ -163,6 +175,10 @@
         }
     }
 
+    function checkPatternLim(sprite) {
+        return sprite._pattern < sprite._actor._patternPreAMV;
+    }
+
     function updateMSW(actor, state) {
         actor._mainswAMV = state;
     }
@@ -171,11 +187,11 @@
         return getMotion(actor) === "swing" ? 1 : 0;
     }
 
-    function checkSignLC(actor, sign) {
+    function checkSignLM(actor, sign) {
         return Math.sign(actor._loopCountAMV) === sign;
     }
 
-    function checkSignLCC(actor, sign) {
+    function checkSignLMC(actor, sign) {
         return Math.sign(actor._loopCCountAMV) === sign;
     }
 
@@ -201,11 +217,13 @@
     const _Game_Actor_performVictory = Game_Actor.prototype.performVictory;
     Game_Actor.prototype.performVictory = function() {
         _Game_Actor_performVictory.call(this);
-        const params = getTagParams(this);
-        if (!this.canMove() || !params) return;
+        const paramss = getTagParams(this);
+        if (!this.canMove() || !paramss) return;
         const scene = SceneManager._scene;
         const motions = Sprite_Actor.MOTIONS;
-        this._motionInfoAMV = params;
+        this._motionInfoAMV = paramss;
+        const paramsTmp = PARAMS[paramss.type] || paramss[0];
+        this.requestMotion(paramsTmp.type);
         this._loopCountAMV = 0;
         this._loopCCountAMV = 0;
         this._patternPreAMV = 4;
@@ -309,7 +327,6 @@
         } else if (checkMSW(actor, 1, 0)) {
             this._pattern = 0;
             updateMSW(actor, 2) ;
-            actor.requestMotion("wait");
         }
         _Sprite_Actor_updateFrame.call(this);
     };
@@ -328,12 +345,13 @@
     Sprite_Actor.prototype.updateFrameNormalAMV = function() {
         const actor = this._actor;
         const motionInfo = actor._motionInfoAMV;
-        if (checkMSW(actor, 2, 0) && this._pattern < actor._patternPreAMV) {
+        if (checkMSW(actor, 2, 0) && checkPatternLim(this)) {
              if (motionInfo[0] !== "") {
                  this.updateFrameNormalProcAMV();
-             } else if (checkSignLC(actor, 1)) {
-                 this.refreshWeaponAMV(actor._loopCountAMV--);
-             } else if (checkSignLC(actor, -1)) {
+             } else if (checkSignLM(actor, 1)) {
+                 this.refreshWeaponAMV(getCountLM(actor));
+                 actor._loopCountAMV--;
+             } else if (checkSignLM(actor, -1)) {
                  this.refreshWeaponAMV(1);
              } else {
                  this.updateMotionDefAMV();
@@ -345,7 +363,7 @@
     Sprite_Actor.prototype.updateFrameNormalProcAMV = function() {
         const actor = this._actor;
         const motionInfo = actor._motionInfoAMV;
-        if (checkSignLC(actor, 0)) { 
+        if (checkSignLM(actor, 0)) { 
             const motion = motionInfo.shift();
             this.selectMotionTypeAMV(motion.type, motion.loop);
             this.selectActorImageAMV();
@@ -358,26 +376,26 @@
             }
         } else {
             actor._loopCountAMV--;
-            this.refreshWeaponAMV(actor._loopCountAMV + 1);
+            this.refreshWeaponAMV(getCountLM(actor) + 1);
         }
     };
 
     Sprite_Actor.prototype.updateFrameGroupAMV = function() {
         const actor = this._actor;
-        if (!checkSignLC(actor, 0) && checkMSW(actor, 2, 0)) {
+        if (!checkSignLM(actor, 0) && checkMSW(actor, 2, 0)) {
              const motionCInfo = actor._motionCInfoAMV;
-             if (checkSignLCC(actor, 1) &&
+             if (checkSignLMC(actor, 1) &&
                  !this.updateFrameGroupProc1AMV()) {
                   this.updateFrameGroupResetAMV(0);
              } else {
-                 const motion = getMotionLC(actor);
+                 const motion = getMotionLMC(actor);
                  this.selectCMotionTypeAMV(motion.type, motion.loop);
                  this.selectActorImageAMV();
                  this.refreshWeaponAMV(checkSwing(actor));
                  this.updateFrameGroupResetAMV(-1);
              }
         }
-        if (checkSignLC(actor, 0)) {
+        if (checkSignLM(actor, 0)) {
             actor._motionCInfoAMV = undefined;
             actor._patternPreAMV = 4;
         } else {
@@ -389,13 +407,13 @@
         const actor = this._actor;
         const motionCInfo = actor._motionCInfoAMV;
         let index = actor._motionCIndexAMV;
-        if (this._pattern < actor._patternPreAMV) {
+        if (checkPatternLim(this)) {
              this.updateFrameGroupProc2AMV();
         }
-        if (checkSignLCC(actor, 1)) return false;
+        if (checkSignLMC(actor, 1)) return false;
         if (++index >= motionCInfo.length) {
             actor._motionCIndexAMV = 0;
-            if (checkSignLC(actor, 1)) actor._loopCountAMV--;
+            if (checkSignLM(actor, 1)) actor._loopCountAMV--;
             return false;
         }
         actor._motionCIndexAMV = index;
@@ -409,7 +427,7 @@
             this.refreshWeaponAMV(1);
         } else if (actor._motionInfoAMV) {
             actor._loopCCountAMV--;
-            this.refreshWeaponAMV(actor._loopCCountAMV);
+            this.refreshWeaponAMV(getCountLMC(actor));
         } else {
             this.updateMotionDefAMV();
         }
@@ -417,17 +435,16 @@
 
     Sprite_Actor.prototype.updateFrameGroupResetAMV = function(base) {
         const actor = this._actor;
-        if (actor._motionInfoAMV[0] === "" &&
-            actor._loopCountAMV === base) {
-             if (base === 0) {
-                 actor._motionInfoAMV = undefined;
-                 this.updateMotionDefAMV();
-                 actor._motionCInfoAMV = undefined;
-             } else if (actor._loopCCountAMV === base) {
-                 actor._motionCInfoAMV = undefined;
-             }
+        if (actor._motionInfoAMV[0] === "" && getCountLM(actor) === base) {
+            if (base === 0) {
+                actor._motionInfoAMV = undefined;
+                this.updateMotionDefAMV();
+                actor._motionCInfoAMV = undefined;
+            } else if (getCountLMC(actor) === base) {
+                actor._motionCInfoAMV = undefined;
+            }
         } else {
-            if (base === -1 && actor._loopCCountAMV === base) {
+            if (base === -1 && getCountLMC(actor) === base) {
                 actor._motionCInfoAMV = undefined;
             }
         }
@@ -485,30 +502,28 @@
 
     Sprite_Actor.prototype.updateMotionCountGProcAMV = function() {
         const actor = this._actor;
-        const count = actor._loopCountAMV;
         actor._loopCCountAMV--;
-        if (checkSignLCC(actor, 0) && count === 1) {
+        if (checkSignLMC(actor, 0) && getCountLM(actor) === 1) {
              actor._motionCInfoAMV = undefined;
              this.updateMotionDefAMV();
              updateMSW(actor, 2);
-             return;
+        } else {
+            const motion = getMotionLMC(actor);
+            actor._loopCountAMV--;
+            actor._loopCCountAMV = motion.loop;
+            actor._patternPreAMV = 4;
+            this._pattern = -1;
+            actor._resizeIdxAMV = Math.max(index - 2, 0);
+            actor._sizeInfAMV = actor._sizeInfMaxAMV;
+            this._motion = getMotionObj(actor);
         }
-        const index = actor._motionCIndexAMV;
-        const motons = actor._motionCInfoAMV;
-        actor._loopCountAMV--;
-        actor._loopCCountAMV = motons[index].loop;
-        actor._patternPreAMV = 4;
-        this._pattern = -1;
-        actor._resizeIdxAMV = Math.max(index - 2, 0);
-        actor._sizeInfAMV = actor._sizeInfMaxAMV;
-        this._motion = getMotionObj(actor);
     };
 
     Sprite_Actor.prototype.updateMotionCountNProcAMV = function() {
         const actor = this._actor;
         const index = actor._motionCIndexAMV;
         actor._loopCountAMV--;
-        if (checkSignLC(actor, -1)) {
+        if (checkSignLM(actor, -1)) {
             if (actor._motionInfoAMV.length === 0) {
                 this.updateMotionDefAMV();
             }
