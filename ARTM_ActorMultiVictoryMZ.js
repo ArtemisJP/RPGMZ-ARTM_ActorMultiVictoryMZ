@@ -9,6 +9,7 @@
 // 1.1.0 戦闘不能アクターも勝利モーションになる不具合を修正
 //       大規模なリファクタリングを実施
 // 1.1.1 勝利モーション開始直後の周期遅延を修正
+// 1.1.2 負荷軽減のためリファクタリングを実施
 // =================================================================
 /*:ja
  * @target MZ
@@ -219,8 +220,6 @@
         _Game_Actor_performVictory.call(this);
         const paramss = getTagParams(this);
         if (!this.canMove() || !paramss) return;
-        const scene = SceneManager._scene;
-        const motions = Sprite_Actor.MOTIONS;
         this._motionInfoAMV = paramss;
         const paramsTmp = PARAMS[paramss.type] || paramss[0];
         this.requestMotion(paramsTmp.type);
@@ -228,6 +227,16 @@
         this._loopCCountAMV = 0;
         this._patternPreAMV = 4;
         this._mainswAMV = 1;
+    };
+
+    //-----------------------------------------------------------------------------
+    // Game_Party
+    //
+    const _Game_Party_performVictory = Game_Party.prototype.performVictory;
+    Game_Party.prototype.performVictory = function() {
+        _Game_Party_performVictory.call(this);
+        const motions = Sprite_Actor.MOTIONS;
+        const scene = SceneManager._scene;
         for (key in motions) {
             if (!motions[key].loop) {
                 motions[key].loop = true;
